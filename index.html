@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Каталог игр</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e1e2f, #111119);
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            margin: 20px 0 10px 0;
+            font-size: 2.5rem;
+            text-transform: uppercase;
+            background: linear-gradient(45deg, #ff7b00, #ffae00);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #ff7b00, #ffae00);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(255, 123, 0, 0.4);
+        }
+
+        /* Красная кнопка для удаления */
+        .btn-danger {
+            background: linear-gradient(45deg, #ff3333, #b30000);
+            margin-top: 10px;
+        }
+        .btn-danger:hover {
+            box-shadow: 0 5px 15px rgba(255, 51, 51, 0.4);
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        .game-card {
+            background-color: #242438;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 25px rgba(255, 123, 0, 0.2);
+        }
+
+        .game-poster {
+            width: 100%;
+            height: 350px;
+            object-fit: cover;
+        }
+
+        .game-info {
+            padding: 15px;
+        }
+
+        .game-title {
+            margin: 0 0 8px 0;
+            font-size: 1.2rem;
+        }
+
+        .game-genre {
+            margin: 0;
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+
+        /* Модальное окно */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: #242438;
+            padding: 30px;
+            border-radius: 15px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px; right: 20px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #aaa;
+        }
+        .close-btn:hover { color: white; }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ccc;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            background: #1e1e2f;
+            border: 1px solid #444;
+            border-radius: 6px;
+            color: white;
+            box-sizing: border-box;
+        }
+        .form-group textarea { height: 80px; resize: none; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Каталог игр</h1>
+        <button class="btn" onclick="openModal('add')">Добавить игру</button>
+    </header>
+
+    <div class="games-grid" id="gamesGrid"></div>
+
+    <div class="modal" id="gameModal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle">Добавить игру</h2>
+            <form id="gameForm">
+                <input type="hidden" id="gameId">
+                <div class="form-group">
+                    <label>Название</label>
+                    <input type="text" id="titleInput" required>
+                </div>
+                <div class="form-group">
+                    <label>Жанр</label>
+                    <input type="text" id="genreInput" required>
+                </div>
+                <div class="form-group">
+                    <label>Ссылка на постер</label>
+                    <input type="url" id="posterInput" required>
+                </div>
+                <div class="form-group">
+                    <label>Описание</label>
+                    <textarea id="descInput"></textarea>
+                </div>
+                
+                <button type="submit" class="btn" style="width: 100%;">Сохранить</button>
+                <button type="button" id="deleteBtn" class="btn btn-danger" style="width: 100%; display: none;" onclick="deleteGame()">Удалить игру</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000/api/games';
+        const grid = document.getElementById('gamesGrid');
+        const modal = document.getElementById('gameModal');
+        const gameForm = document.getElementById('gameForm');
+        const deleteBtn = document.getElementById('deleteBtn');
+        
+        let allGames = [];
+
+        // Загрузка игр с сервера
+        async function loadGames() {
+            try {
+                const response = await fetch(API_URL);
+                allGames = await response.json();
+                renderGames(allGames);
+            } catch (error) {
+                console.error("Ошибка загрузки данных:", error);
+            }
+        }
+
+        // Рендеринг карточек
+        function renderGames(games) {
+            grid.innerHTML = '';
+            games.forEach(game => {
+                const card = document.createElement('div');
+                card.className = 'game-card';
+                card.onclick = () => openModal('edit', game.id);
+                card.innerHTML = `
+                    <img src="${game.poster}" alt="${game.title}" class="game-poster">
+                    <div class="game-info">
+                        <h3 class="game-title">${game.title}</h3>
+                        <p class="game-genre">${game.genre}</p>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // Открытие модального окна
+        function openModal(mode, gameId = null) {
+            modal.style.display = 'flex';
+            if (mode === 'add') {
+                document.getElementById('modalTitle').innerText = 'Добавить новую игру';
+                gameForm.reset();
+                document.getElementById('gameId').value = '';
+                deleteBtn.style.display = 'none'; // Скрываем кнопку удаления при добавлении новой игры
+            } else if (mode === 'edit') {
+                document.getElementById('modalTitle').innerText = 'Редактировать игру';
+                deleteBtn.style.display = 'block'; // Показываем кнопку удаления при редактировании
+                const game = allGames.find(g => g.id === gameId);
+                if (game) {
+                    document.getElementById('gameId').value = game.id;
+                    document.getElementById('titleInput').value = game.title;
+                    document.getElementById('genreInput').value = game.genre;
+                    document.getElementById('posterInput').value = game.poster;
+                    document.getElementById('descInput').value = game.description || '';
+                }
+            }
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        // Функция удаления игры
+        async function deleteGame() {
+            const id = document.getElementById('gameId').value;
+            if (!id) return;
+
+            if (confirm("Вы уверены, что хотите удалить эту игру из каталога?")) {
+                try {
+                    const response = await fetch(`${API_URL}/${id}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response.ok) {
+                        closeModal();
+                        loadGames(); // Перезагружаем список
+                    }
+                } catch (error) {
+                    console.error("Ошибка при удалении:", error);
+                }
+            }
+        }
+
+        // Отправка формы (Добавление / Изменение)
+        gameForm.onsubmit = async function (e) {
+            e.preventDefault();
+            
+            const id = document.getElementById('gameId').value;
+            const gameData = {
+                title: document.getElementById('titleInput').value,
+                genre: document.getElementById('genreInput').value,
+                poster: document.getElementById('posterInput').value,
+                description: document.getElementById('descInput').value
+            };
+
+            try {
+                let response;
+                if (id) {
+                    response = await fetch(`${API_URL}/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(gameData)
+                    });
+                } else {
+                    response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(gameData)
+                    });
+                }
+
+                if (response.ok) {
+                    closeModal();
+                    loadGames();
+                }
+            } catch (error) {
+                console.error("Ошибка при сохранении:", error);
+            }
+        };
+
+        loadGames();
+    </script>
+</body>
+</html>
